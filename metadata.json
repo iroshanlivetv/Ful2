@@ -1,0 +1,7 @@
+{
+  "name": "FuelPass",
+  "description": "Sri Lanka National Fuel Pass digital QR wallet, quota tracker, and fuel management dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
