@@ -11,6 +11,7 @@ import com.example.data.TransactionEntity
 import com.example.data.VehicleEntity
 import com.example.util.DateUtils
 import com.example.util.QrCodeGenerator
+import com.example.util.VehicleValidator
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -47,8 +48,8 @@ class FuelViewModel(application: Application) : AndroidViewModel(application) {
         val database = FuelDatabase.getInstance(application)
         repository = FuelRepository(database.vehicleDao(), database.transactionDao())
 
-        // Seed initial sample data if the wallet is empty so the user can immediately test
         viewModelScope.launch {
+            repository.removeFakeDemoVehicles()
             repository.checkAndApplyWeeklyResets()
         }
     }
@@ -145,35 +146,62 @@ class FuelViewModel(application: Application) : AndroidViewModel(application) {
         isPrimary: Boolean
     ) {
         viewModelScope.launch {
+            val trimmedNo = vehicleNumber.trim().uppercase()
+            val trimmedQr = qrPayload.trim()
+
+            // Requirement 2: Both Vehicle Number and QR Code must be provided!
+            if (trimmedNo.isBlank() || trimmedQr.isBlank()) {
+                _toastEvent.emit("Both Vehicle Number and QR Code are required!")
+                return@launch
+            }
+
+            // Requirement 3: Vehicle number format validation (no names allowed)
+            if (!VehicleValidator.isValidVehicleNumber(trimmedNo)) {
+                _toastEvent.emit("Invalid vehicle number! Names are not allowed.")
+                return@launch
+            }
+
+            val otherVehicles = uiState.value.vehicles.filter { it.id != id }
+
+            // Requirement 1: Duplicate checks
+            if (VehicleValidator.isDuplicateVehicleNumber(trimmedNo, otherVehicles.map { it.vehicleNumber })) {
+                _toastEvent.emit("Vehicle Number already saved!")
+                return@launch
+            }
+
+            if (otherVehicles.any { it.qrPayload.trim() == trimmedQr }) {
+                _toastEvent.emit("Your QR CODE already saved!")
+                return@launch
+            }
+
             if (id == null || id == 0L) {
                 val newId = repository.addVehicle(
-                    vehicleNumber = vehicleNumber,
+                    vehicleNumber = trimmedNo,
                     vehicleType = vehicleType,
                     fuelType = fuelType,
                     weeklyQuota = weeklyQuota,
-                    qrPayload = qrPayload,
+                    qrPayload = trimmedQr,
                     isPrimary = isPrimary
                 )
                 _selectedVehicleId.value = newId
-                _toastEvent.emit("Vehicle $vehicleNumber added to wallet!")
+                _toastEvent.emit("Vehicle $trimmedNo added to wallet!")
             } else {
                 val current = uiState.value.vehicles.find { it.id == id }
                 if (current != null) {
                     val updated = current.copy(
-                        vehicleNumber = vehicleNumber.trim().uppercase(),
+                        vehicleNumber = trimmedNo,
                         vehicleType = vehicleType,
                         fuelType = fuelType,
                         weeklyQuota = weeklyQuota,
-                        // If quota increased or changed, ensure balance doesn't exceed new quota
                         balanceQuota = if (current.balanceQuota > weeklyQuota) weeklyQuota else current.balanceQuota,
-                        qrPayload = qrPayload.ifBlank { current.qrPayload },
+                        qrPayload = trimmedQr,
                         isPrimary = isPrimary
                     )
                     repository.updateVehicle(updated)
                     if (isPrimary) {
                         repository.setPrimary(updated.id)
                     }
-                    _toastEvent.emit("Vehicle $vehicleNumber updated!")
+                    _toastEvent.emit("Vehicle $trimmedNo updated!")
                 }
             }
             closeAddEditDialog()
@@ -244,36 +272,11 @@ class FuelViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun seedDefaultIfEmpty() {
+    fun clearAllData() {
         viewModelScope.launch {
-            val vehicles = uiState.value.vehicles
-            if (vehicles.isEmpty()) {
-                val carId = repository.addVehicle(
-                    vehicleNumber = "CAS-1234",
-                    vehicleType = "CAR",
-                    fuelType = "Petrol 92",
-                    weeklyQuota = 25.0,
-                    qrPayload = "NFP:LK:CAS-1234:CAR:Petrol 92",
-                    isPrimary = true
-                )
-                repository.addVehicle(
-                    vehicleNumber = "BI-5678",
-                    vehicleType = "BIKE",
-                    fuelType = "Petrol 95",
-                    weeklyQuota = 8.0,
-                    qrPayload = "NFP:LK:BI-5678:BIKE:Petrol 95",
-                    isPrimary = false
-                )
-                repository.addVehicle(
-                    vehicleNumber = "WP-AB-9012",
-                    vehicleType = "TUK",
-                    fuelType = "Petrol 92",
-                    weeklyQuota = 20.0,
-                    qrPayload = "NFP:LK:WP-AB-9012:TUK:Petrol 92",
-                    isPrimary = false
-                )
-                _selectedVehicleId.value = carId
-            }
+            repository.clearAllData()
+            _selectedVehicleId.value = null
+            _toastEvent.emit("All fuel passes and transaction data cleared")
         }
     }
 }

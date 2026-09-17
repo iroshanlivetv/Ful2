@@ -113,4 +113,18 @@ class FuelRepository(
         }
         transactionDao.deleteTransaction(transaction)
     }
+
+    suspend fun removeFakeDemoVehicles() {
+        val fakeNumbers = listOf("CAS-1234", "CAS-123", "BI-5678", "WP-AB-9012")
+        val fakeVehicles = vehicleDao.getVehiclesByNumbers(fakeNumbers)
+        for (v in fakeVehicles) {
+            transactionDao.deleteTransactionsForVehicle(v.id)
+            vehicleDao.deleteVehicle(v)
+        }
+    }
+
+    suspend fun clearAllData() {
+        transactionDao.deleteAllTransactions()
+        vehicleDao.deleteAllVehicles()
+    }
 }

@@ -65,39 +65,23 @@ fun WalletListScreen(
     onQuickPumpClick: (VehicleEntity) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onAddVehicleClick,
-                containerColor = FuelBluePrimary,
-                contentColor = androidx.compose.ui.graphics.Color.White,
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier.testTag("wallet_fab_add_pass")
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add New Pass")
-            }
-        }
-    ) { innerPadding ->
-        if (vehicles.isEmpty()) {
-            EmptyDashboardState(
-                onAddClick = onAddVehicleClick,
-                onSeedDemoData = {},
-                modifier = Modifier.padding(innerPadding)
-            )
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .testTag("wallet_list_screen"),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Summary Card
-                item {
-                    val totalRemaining = vehicles.sumOf { it.balanceQuota }
-                    val totalWeekly = vehicles.sumOf { it.weeklyQuota }
+    if (vehicles.isEmpty()) {
+        EmptyDashboardState(
+            onAddClick = onAddVehicleClick,
+            modifier = modifier
+        )
+    } else {
+        LazyColumn(
+            modifier = modifier
+                .fillMaxSize()
+                .testTag("wallet_list_screen"),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Summary Card
+            item {
+                val totalRemaining = vehicles.sumOf { it.balanceQuota }
+                val totalWeekly = vehicles.sumOf { it.weeklyQuota }
 
                     Card(
                         modifier = Modifier.fillMaxWidth(),

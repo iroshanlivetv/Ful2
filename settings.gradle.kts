@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "FuelPass"
+rootProject.name = "Fuel Pass"
 
 include(":app")

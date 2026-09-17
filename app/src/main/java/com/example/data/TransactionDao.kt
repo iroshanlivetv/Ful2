@@ -23,4 +23,7 @@ interface TransactionDao {
 
     @Query("DELETE FROM fuel_transactions WHERE vehicleId = :vehicleId")
     suspend fun deleteTransactionsForVehicle(vehicleId: Long)
+
+    @Query("DELETE FROM fuel_transactions")
+    suspend fun deleteAllTransactions()
 }

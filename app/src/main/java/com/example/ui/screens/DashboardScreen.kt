@@ -87,13 +87,11 @@ fun DashboardScreen(
     onPumpClick: () -> Unit,
     onEditVehicleClick: (VehicleEntity) -> Unit,
     onFullscreenQrClick: () -> Unit,
-    onSeedDemoData: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (vehicles.isEmpty()) {
         EmptyDashboardState(
             onAddClick = onAddVehicleClick,
-            onSeedDemoData = onSeedDemoData,
             modifier = modifier
         )
         return
@@ -568,9 +566,7 @@ fun QuickStatsCard(
 
 @Composable
 fun EmptyDashboardState(
-
     onAddClick: () -> Unit,
-    onSeedDemoData: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -619,19 +615,6 @@ fun EmptyDashboardState(
                 Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("ADD YOUR VEHICLE PASS", fontWeight = FontWeight.Bold)
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            OutlinedButton(
-                onClick = onSeedDemoData,
-                modifier = Modifier
-                    .fillMaxWidth(0.85f)
-                    .height(48.dp)
-                    .testTag("load_demo_passes_button"),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Text("Load Sample Passes (Car, Bike, Tuk)", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }
         }
     }

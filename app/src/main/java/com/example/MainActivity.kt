@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.LocalGasStation
@@ -106,15 +107,9 @@ fun FuelPassApp(viewModel: FuelViewModel, isDarkMode: Boolean) {
     val showPumpDialog by viewModel.showPumpDialog.collectAsStateWithLifecycle()
     val showFullscreenQr by viewModel.showFullscreenQr.collectAsStateWithLifecycle()
     val vehiclePendingDelete by viewModel.vehiclePendingDelete.collectAsStateWithLifecycle()
+    var showClearAllConfirm by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
-
-    // Seed defaults on initial launch if empty
-    LaunchedEffect(uiState.isInitialized) {
-        if (uiState.isInitialized && uiState.vehicles.isEmpty()) {
-            viewModel.seedDefaultIfEmpty()
-        }
-    }
 
     // Listen for toast/snackbar events
     LaunchedEffect(Unit) {
@@ -167,6 +162,19 @@ fun FuelPassApp(viewModel: FuelViewModel, isDarkMode: Boolean) {
                             contentDescription = if (isDarkMode) "Switch to Light Mode" else "Switch to Dark Mode",
                             tint = if (isDarkMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                         )
+                    }
+
+                    if (uiState.vehicles.isNotEmpty()) {
+                        IconButton(
+                            onClick = { showClearAllConfirm = true },
+                            modifier = Modifier.testTag("top_bar_clear_all_button")
+                        ) {
+                            Icon(
+                                Icons.Default.DeleteOutline,
+                                contentDescription = "Clear All Passes",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
 
                     if (uiState.currentTab != FuelNavTab.HISTORY) {
@@ -252,8 +260,7 @@ fun FuelPassApp(viewModel: FuelViewModel, isDarkMode: Boolean) {
                         onAddVehicleClick = { viewModel.openAddVehicleDialog() },
                         onPumpClick = { viewModel.openPumpDialog() },
                         onEditVehicleClick = { viewModel.openEditVehicleDialog(it) },
-                        onFullscreenQrClick = { viewModel.showFullscreenQr.value = true },
-                        onSeedDemoData = { viewModel.seedDefaultIfEmpty() }
+                        onFullscreenQrClick = { viewModel.showFullscreenQr.value = true }
                     )
                 }
 
@@ -289,6 +296,7 @@ fun FuelPassApp(viewModel: FuelViewModel, isDarkMode: Boolean) {
     if (showAddEditDialog) {
         AddEditVehicleDialog(
             initialVehicle = vehicleToEdit,
+            existingVehicles = uiState.vehicles,
             onDismiss = { viewModel.closeAddEditDialog() },
             onSave = { id, vNo, vType, fType, quota, qr, isPrim ->
                 viewModel.saveVehicle(id, vNo, vType, fType, quota, qr, isPrim)
@@ -334,6 +342,32 @@ fun FuelPassApp(viewModel: FuelViewModel, isDarkMode: Boolean) {
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.cancelDeleteVehicle() }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showClearAllConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearAllConfirm = false },
+            title = { Text("Clear All Vehicle Passes?") },
+            text = {
+                Text("Are you sure you want to remove all vehicle passes and fuel transaction records? You can then add your own vehicle passes from fresh.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearAllData()
+                        showClearAllConfirm = false
+                    },
+                    modifier = Modifier.testTag("confirm_clear_all_button")
+                ) {
+                    Text("Clear All", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearAllConfirm = false }) {
                     Text("Cancel")
                 }
             }

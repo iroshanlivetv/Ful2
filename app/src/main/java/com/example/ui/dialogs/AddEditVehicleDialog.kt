@@ -22,10 +22,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -64,10 +66,12 @@ import com.example.ui.theme.FuelBlueDark
 import com.example.ui.theme.FuelBluePrimary
 import com.example.ui.theme.Slate400
 import com.example.util.QrCodeGenerator
+import com.example.util.VehicleValidator
 
 @Composable
 fun AddEditVehicleDialog(
     initialVehicle: VehicleEntity? = null,
+    existingVehicles: List<VehicleEntity> = emptyList(),
     onDismiss: () -> Unit,
     onSave: (
         id: Long?,
@@ -81,6 +85,7 @@ fun AddEditVehicleDialog(
 ) {
     val context = LocalContext.current
     val isEditing = initialVehicle != null
+    val otherVehicles = existingVehicles.filter { it.id != initialVehicle?.id }
 
     var vehicleNumber by remember { mutableStateOf(initialVehicle?.vehicleNumber ?: "") }
     var vehicleType by remember { mutableStateOf(initialVehicle?.vehicleType ?: "CAR") }
@@ -120,16 +125,25 @@ fun AddEditVehicleDialog(
                 inputStream?.close()
                 if (bitmap != null) {
                     val decodedText = QrCodeGenerator.decodeQrFromBitmap(bitmap)
-                    if (decodedText != null) {
-                        qrPayload = decodedText
-                        qrImportStatus = "QR decoded successfully! ✅"
+                    if (!decodedText.isNullOrBlank()) {
+                        val decodedTrimmed = decodedText.trim()
+                        val isDuplicateQr = otherVehicles.any { it.qrPayload.trim() == decodedTrimmed }
+                        if (isDuplicateQr) {
+                            errorMessage = "Your QR CODE already saved!"
+                            qrImportStatus = "Your QR CODE already saved!"
+                        } else {
+                            qrPayload = decodedTrimmed
+                            qrImportStatus = "QR decoded successfully! ✅"
+                            errorMessage = null
+                        }
                     } else {
-                        qrPayload = "NFP:IMG:${System.currentTimeMillis()}"
-                        qrImportStatus = "Image loaded as pass QR ✅"
+                        errorMessage = "Could not decode QR code from the selected image. Please upload a clear QR code image."
+                        qrImportStatus = "QR not found in image ❌"
                     }
                 }
             } catch (e: Exception) {
                 qrImportStatus = "Could not parse image"
+                errorMessage = "Failed to read image file"
             }
         }
     }
@@ -258,11 +272,27 @@ fun AddEditVehicleDialog(
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = vehicleNumber,
-                    onValueChange = {
-                        vehicleNumber = it.uppercase()
+                    onValueChange = { input ->
+                        val upper = input.uppercase()
+                        vehicleNumber = upper
                         errorMessage = null
+                        if (upper.isNotBlank()) {
+                            val trimmed = upper.trim()
+                            if (VehicleValidator.isDuplicateVehicleNumber(trimmed, otherVehicles.map { it.vehicleNumber })) {
+                                errorMessage = "Vehicle Number already saved!"
+                            }
+                        }
                     },
-                    placeholder = { Text("e.g. CAS-1234 or WP-CAA-5678") },
+                    placeholder = { Text("e.g. ABC-1234, 123-2222, 52-2236") },
+                    supportingText = {
+                        Text(
+                            text = "Format: Letters, Numbers & Hyphen (Names are not allowed)",
+                            fontSize = 11.sp,
+                            color = if (errorMessage == "Vehicle Number already saved!") MaterialTheme.colorScheme.error else Slate400
+                        )
+                    },
+                    isError = errorMessage == "Vehicle Number already saved!" ||
+                            (vehicleNumber.isNotBlank() && vehicleNumber.length >= 4 && !VehicleValidator.isValidVehicleNumber(vehicleNumber.trim())),
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -318,7 +348,7 @@ fun AddEditVehicleDialog(
 
                 Spacer(modifier = Modifier.height(18.dp))
 
-                // Auto Quota Display (Replaces manual typing)
+                // Auto Quota Display
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
@@ -359,12 +389,24 @@ fun AddEditVehicleDialog(
                 Spacer(modifier = Modifier.height(18.dp))
 
                 // Fuel Pass QR Code
-                Text(
-                    text = "FUEL PASS QR CODE",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "FUEL PASS QR CODE",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "(REQUIRED)",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (qrPayload.isNotBlank()) FuelBluePrimary else MaterialTheme.colorScheme.error
+                    )
+                }
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Row(
@@ -403,17 +445,74 @@ fun AddEditVehicleDialog(
                     }
                 }
 
+                // QR Code Status Card (Required visual feedback)
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (qrPayload.isNotBlank()) FuelBluePrimary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.error.copy(alpha = 0.08f)
+                    ),
+                    border = BorderStroke(
+                        1.dp,
+                        if (qrPayload.isNotBlank()) FuelBluePrimary.copy(alpha = 0.4f) else MaterialTheme.colorScheme.error.copy(alpha = 0.4f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (qrPayload.isNotBlank()) Icons.Default.CheckCircle else Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = if (qrPayload.isNotBlank()) FuelBluePrimary else MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (qrPayload.isNotBlank()) "Fuel Pass QR Linked ✓" else "Fuel Pass QR Missing (Required)",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (qrPayload.isNotBlank()) FuelBluePrimary else MaterialTheme.colorScheme.error
+                            )
+                            Text(
+                                text = if (qrPayload.isNotBlank()) "Payload: ${qrPayload.take(28)}..." else "Both Vehicle Number & QR Code are required to save",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (qrPayload.isNotBlank()) {
+                            IconButton(
+                                onClick = {
+                                    qrPayload = ""
+                                    qrImportStatus = null
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Remove QR",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
                 if (qrImportStatus != null) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = qrImportStatus ?: "",
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = if (qrImportStatus?.contains("already saved", ignoreCase = true) == true) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Medium
                     )
                 }
-
-
 
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -451,7 +550,7 @@ fun AddEditVehicleDialog(
                         text = errorMessage ?: "",
                         color = MaterialTheme.colorScheme.error,
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.Bold
                     )
                 }
 
@@ -460,18 +559,44 @@ fun AddEditVehicleDialog(
                 // Action Buttons
                 Button(
                     onClick = {
-                        val trimmedNo = vehicleNumber.trim()
+                        val trimmedNo = vehicleNumber.trim().uppercase()
+                        val trimmedQr = qrPayload.trim()
+
+                        // Rule 2: Both Vehicle Number AND QR Code are strictly required!
+                        if (trimmedNo.isBlank() && trimmedQr.isBlank()) {
+                            errorMessage = "Vehicle Number and QR Code are both required!"
+                            return@Button
+                        }
                         if (trimmedNo.isBlank()) {
                             errorMessage = "Please enter vehicle registration number"
                             return@Button
                         }
+                        if (trimmedQr.isBlank()) {
+                            errorMessage = "Please scan or upload your Fuel Pass QR code"
+                            return@Button
+                        }
+
+                        // Rule 3: Vehicle number format validation (names are strictly forbidden!)
+                        if (!VehicleValidator.isValidVehicleNumber(trimmedNo)) {
+                            errorMessage = "Invalid vehicle number! Names are not allowed. (Ex: ABC-1234, 123-2222, 52-2236, AB2-8952)"
+                            return@Button
+                        }
+
+                        // Rule 1: Duplicate checks
+                        if (VehicleValidator.isDuplicateVehicleNumber(trimmedNo, otherVehicles.map { it.vehicleNumber })) {
+                            errorMessage = "Vehicle Number already saved!"
+                            return@Button
+                        }
+
+                        if (otherVehicles.any { it.qrPayload.trim() == trimmedQr }) {
+                            errorMessage = "Your QR CODE already saved!"
+                            return@Button
+                        }
+
                         if (weeklyQuota <= 0) {
                             errorMessage = "Please enter a valid weekly quota"
                             return@Button
                         }
-                        val finalQr = if (qrPayload.isBlank()) {
-                            "NFP:LK:$trimmedNo:$vehicleType:$fuelType"
-                        } else qrPayload
 
                         onSave(
                             initialVehicle?.id,
@@ -479,7 +604,7 @@ fun AddEditVehicleDialog(
                             vehicleType,
                             fuelType,
                             weeklyQuota,
-                            finalQr,
+                            trimmedQr,
                             isPrimary
                         )
                     },
@@ -504,8 +629,16 @@ fun AddEditVehicleDialog(
         QrCameraScannerDialog(
             onDismiss = { showCameraScanner = false },
             onQrScanned = { scannedPayload ->
-                qrPayload = scannedPayload
-                qrImportStatus = "✓ Fuel Pass QR scanned successfully!"
+                val scannedTrimmed = scannedPayload.trim()
+                val isDuplicateQr = otherVehicles.any { it.qrPayload.trim() == scannedTrimmed }
+                if (isDuplicateQr) {
+                    errorMessage = "Your QR CODE already saved!"
+                    qrImportStatus = "Your QR CODE already saved!"
+                } else {
+                    qrPayload = scannedTrimmed
+                    qrImportStatus = "✓ Fuel Pass QR scanned successfully!"
+                    errorMessage = null
+                }
                 showCameraScanner = false
             }
         )

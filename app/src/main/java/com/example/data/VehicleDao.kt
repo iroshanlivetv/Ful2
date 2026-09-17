@@ -39,4 +39,13 @@ interface VehicleDao {
 
     @Query("UPDATE vehicles SET isPrimary = CASE WHEN id = :primaryId THEN 1 ELSE 0 END")
     suspend fun setPrimaryVehicle(primaryId: Long)
+
+    @Query("SELECT * FROM vehicles WHERE vehicleNumber IN (:numbers)")
+    suspend fun getVehiclesByNumbers(numbers: List<String>): List<VehicleEntity>
+
+    @Query("DELETE FROM vehicles WHERE vehicleNumber IN (:numbers)")
+    suspend fun deleteByVehicleNumbers(numbers: List<String>)
+
+    @Query("DELETE FROM vehicles")
+    suspend fun deleteAllVehicles()
 }
